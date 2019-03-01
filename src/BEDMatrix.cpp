@@ -12,6 +12,10 @@
 #include <Rcpp.h>
 #include <string>
 
+static std::size_t int_ceil(std::size_t x, std::size_t y) {
+    return x / y + (x % y != 0);
+}
+
 class BEDMatrix {
     public:
         BEDMatrix(std::string path, std::size_t n, std::size_t p);
@@ -24,11 +28,12 @@ class BEDMatrix {
         boost::interprocess::file_mapping file;
         boost::interprocess::mapped_region file_region;
         uint8_t* file_data;
-        std::size_t nrow;
-        std::size_t ncol;
+        std::size_t num_samples;
+        std::size_t num_variants;
+        std::size_t num_bytes_per_variant; // ceil(num_samples / PLINK_BED_GENOTYPES_PER_BYTE)
 };
 
-BEDMatrix::BEDMatrix(std::string path, std::size_t n, std::size_t p) : nrow(n), ncol(p) {
+BEDMatrix::BEDMatrix(std::string path, std::size_t n, std::size_t p) : num_samples(n), num_variants(p) {
     try {
         this->file = boost::interprocess::file_mapping(path.c_str(), boost::interprocess::read_only);
     } catch(const boost::interprocess::interprocess_exception& e) {
@@ -37,35 +42,35 @@ BEDMatrix::BEDMatrix(std::string path, std::size_t n, std::size_t p) : nrow(n), 
     this->file_region = boost::interprocess::mapped_region(this->file, boost::interprocess::read_only);
     this->file_data = static_cast<uint8_t*>(this->file_region.get_address());
     // Check magic number
-    if (!(this->file_data[0] == '\x6C' && this->file_data[1] == '\x1B')) {
-        throw std::runtime_error("File is not a binary PED file.");
+    if (!(this->file_data[0] == 0x6C && this->file_data[1] == 0x1B)) {
+        throw std::runtime_error("File is not a PLINK .bed file.");
     }
     // Check mode: 00000001 indicates the default variant-major mode (i.e.
     // list all samples for first variant, all samples for second variant,
     // etc), 00000000 indicates the unsupported sample-major mode (i.e. list
     // all variants for the first sample, list all variants for the second
     // sample, etc)
-    if (this->file_data[2] != '\x01') {
+    if (this->file_data[2] != 0x01) {
         throw std::runtime_error("Sample-major mode is not supported.");
     }
     // Get number of bytes
     const std::size_t num_bytes = this->file_region.get_size();
     // Check if given dimensions match the file
-    if ((this->ncol * ceil((double) this->nrow / PLINK_BED_GENOTYPES_PER_BYTE)) != (num_bytes - PLINK_BED_HEADER_LENGTH)) {
+    if ((this->num_variants * int_ceil(this->num_samples, PLINK_BED_GENOTYPES_PER_BYTE)) != (num_bytes - PLINK_BED_HEADER_LENGTH)) {
         throw std::runtime_error("n or p does not match the dimensions of the file.");
     }
+    this->num_bytes_per_variant = int_ceil(this->num_samples, PLINK_BED_GENOTYPES_PER_BYTE);;
 }
 
 int BEDMatrix::get_genotype(std::size_t i, std::size_t j) {
     // Each byte encodes 4 genotypes; adjust indices
-    std::size_t i_bytes = i / PLINK_BED_GENOTYPES_PER_BYTE;
-    std::size_t n_bytes = this->nrow / PLINK_BED_GENOTYPES_PER_BYTE + (this->nrow % PLINK_BED_GENOTYPES_PER_BYTE != 0); // fast ceil for int
-    std::size_t i_genotypes = 2 * (i - i_bytes * PLINK_BED_GENOTYPES_PER_BYTE);
+    std::size_t which_byte = i / PLINK_BED_GENOTYPES_PER_BYTE;
+    std::size_t which_genotype = 2 * (i - which_byte * PLINK_BED_GENOTYPES_PER_BYTE);
     // Load byte from map
-    uint8_t genotypes = this->file_data[PLINK_BED_HEADER_LENGTH + (j * n_bytes + i_bytes)];
+    uint8_t genotypes = this->file_data[PLINK_BED_HEADER_LENGTH + (j * this->num_bytes_per_variant + which_byte)];
     // Extract genotypes from byte by shifting the genotype of interest to the
     // end of the byte and masking with 00000011
-    uint8_t genotype = genotypes >> i_genotypes & 3;
+    uint8_t genotype = genotypes >> which_genotype & 0x03;
     // Remap genotype value to resemble RAW file, i.e. 0 indicates homozygous
     // major allele, 1 indicates heterozygous, and 2 indicates homozygous minor
     // allele. In BED, the coding is different: homozygous minor allele is 0
@@ -89,13 +94,13 @@ Rcpp::IntegerVector BEDMatrix::extract_vector(Rcpp::IntegerVector i) {
     // Reserve output vector
     Rcpp::IntegerVector out(size_i);
     // Get bounds
-    std::size_t bounds = this->nrow * this->ncol;
+    std::size_t bounds = this->num_samples * this->num_variants;
     // Iterate over indexes
     for (std::size_t idx_i = 0; idx_i < size_i; idx_i++) {
         if (Rcpp::IntegerVector::is_na(i0[idx_i]) || static_cast<std::size_t>(i0[idx_i]) >= bounds) {
             out(idx_i) = NA_INTEGER;
         } else {
-            out(idx_i) = this->get_genotype(i0[idx_i] % this->nrow, i0[idx_i] / this->nrow);
+            out(idx_i) = this->get_genotype(i0[idx_i] % this->num_samples, i0[idx_i] / this->num_samples);
         }
     }
     return out;
@@ -103,7 +108,7 @@ Rcpp::IntegerVector BEDMatrix::extract_vector(Rcpp::IntegerVector i) {
 
 Rcpp::IntegerMatrix BEDMatrix::extract_matrix(Rcpp::IntegerVector i, Rcpp::IntegerVector j) {
     // Check if indexes are out of bounds
-    if (Rcpp::is_true(Rcpp::any(i > this->nrow)) || Rcpp::is_true(Rcpp::any(j > this->ncol))) {
+    if (Rcpp::is_true(Rcpp::any(i > this->num_samples)) || Rcpp::is_true(Rcpp::any(j > this->num_variants))) {
         throw std::runtime_error("subscript out of bounds");
     }
     // Convert from 1-index to 0-index
