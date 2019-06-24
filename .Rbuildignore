@@ -1,8 +1,3 @@
-^.*\.Rproj$
-^\.Rproj\.user$
+^\.appveyor\.yml$
+^\.codecov\.yml$
 ^\.travis\.yml$
-^revdep$
-cran-comments.md
-.pversion
-^codecov\.yml$
-^appveyor\.yml$

@@ -4,7 +4,7 @@ BEDMatrix
 [![CRAN_Status_Badge](http://www.r-pkg.org/badges/version/BEDMatrix)](https://CRAN.R-project.org/package=BEDMatrix)
 [![Rdoc](http://www.rdocumentation.org/badges/version/BEDMatrix)](http://www.rdocumentation.org/packages/BEDMatrix)
 [![Travis-CI Build Status](https://travis-ci.org/QuantGen/BEDMatrix.svg?branch=master)](https://travis-ci.org/QuantGen/BEDMatrix)
-[![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/github/QuantGen/BEDMatrix?branch=master&svg=true)](https://ci.appveyor.com/project/QuantGen/BEDMatrix)
+[![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/8l5elcr595qwajuf?svg=true)](https://ci.appveyor.com/project/agrueneberg/bedmatrix)
 [![Coverage status](https://codecov.io/gh/QuantGen/BEDMatrix/branch/master/graph/badge.svg)](https://codecov.io/github/QuantGen/BEDMatrix?branch=master)
 
 BEDMatrix is an R package that provides a matrix-like wrapper around [.bed](https://www.cog-genomics.org/plink2/formats#bed), one of the genotype/phenotype file formats of [PLINK](https://www.cog-genomics.org/plink2), the whole genome association analysis toolset. BEDMatrix objects are created in R by simply providing the path to a .bed file and once created, they behave similarly to regular matrices with the advantage that genotypes are retrieved on demand without loading the entire file into memory. This allows handling of very large files with limited use of memory.
@@ -61,19 +61,19 @@ install.packages("BEDMatrix")
 Alternatively, install the development version from GitHub:
 
 ```R
-# install.packages("devtools")
-devtools::install_github("QuantGen/BEDMatrix")
+# install.packages("remotes")
+remotes::install_github("QuantGen/BEDMatrix")
 ```
-
-
-Contribute
-----------
-
-- Issue Tracker: https://github.com/QuantGen/BEDMatrix/issues
-- Source Code: https://github.com/QuantGen/BEDMatrix
 
 
 Documentation
 -------------
 
 Further documentation can be found on [RDocumentation](http://www.rdocumentation.org/packages/BEDMatrix).
+
+
+Contributing
+------------
+
+- Issue Tracker: https://github.com/QuantGen/BEDMatrix/issues
+- Source Code: https://github.com/QuantGen/BEDMatrix
